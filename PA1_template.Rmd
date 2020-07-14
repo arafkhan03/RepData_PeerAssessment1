@@ -1,25 +1,152 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
+title: "PA1_template"
+author: "Araf"
+date: "7/13/2020"
 output: 
-  html_document:
-    keep_md: true
+  html_document: 
+    keep_md: true 
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+## Download Data
+We check whether a data directory and data exists or not. If there is not any 
+such drectory we create the folder and download the file.
 
+```{r check & download data}
+setwd <- "./"
+if(!dir.exists("Activity monitoring data")) { dir.create("Activity monitoring 
+                                                         data") }
+file.url   <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
 
+file.path  <- "Activity monitoring data/repdata_data_activity.zip"
+file.unzip <- "Activity monitoring data/repdata_data_activity.zip"
 
-## What is mean total number of steps taken per day?
+if(!file.exists(file.path) & !file.exists(file.unzip)) {
+    download.file(file.url, file.path)
+    unzip(file.path, exdir = "Activity monitoring data")
+}
 
+```
 
+## Load Data
 
-## What is the average daily activity pattern?
+We load the csv file and store in dfvariable:
 
+```{r load data, echo=TRUE, warning=FALSE, message=FALSE}
+df <- read.csv("./Activity monitoring data/activity.csv", header = TRUE)
+```
 
+## Hisotgram of Total Number of Steps Taken Each Day
 
-## Imputing missing values
+Histogram with number of steps taken each day in x axis and frequency in y axis
 
+```{r histogram, echo=TRUE, warning=FALSE, message=FALSE}
+hist(df$steps, main = "Total Number of Steps Taken Each Day", xlab = "Steps")
+```
 
+## Mean & Median Number of Steps Taken Each Day
 
-## Are there differences in activity patterns between weekdays and weekends?
+Return the Mean & Median Value for Steps Taken Each Day without NAs
+
+```{r mean & median, echo=TRUE, warning=FALSE, message=FALSE}
+library(plyr);library(dplyr)
+f <- function(x){
+        list(mean(x, na.rm = TRUE), median(x, na.rm = TRUE))
+}
+df1 <- select(df, steps)  
+as.data.frame(sapply(df1, f), row.names = c("Mean", "Median"))
+```
+
+## Time Series Plot of Avg Steps Taken
+
+Time Series Plot of Daily Average Number of Steps Taken
+
+```{r time series plot, echo=TRUE, warning=FALSE, message=FALSE}
+df$date <- as.Date(df$date)
+df2 <- select(df, c("steps", "interval")) %>% na.omit()
+df2 <- aggregate(df2, by=list(df2$interval), mean)
+plot(df2$Group.1, df2$steps, xlab = "5-Minute Interval", 
+     ylab = "Average Number of Steps Taken", type = "l",
+     main = "Time Series Plot of Average Number of Steps Taken")
+```
+
+## The 5-minute interval that, on average, contains the maximum number of steps
+
+Return the 5-minute interval with highest step count
+
+```{r max interval for steps, echo=TRUE, warning=FALSE, message=FALSE}
+df[max(df$steps, na.rm = TRUE),]
+```
+
+## Code to describe and show a strategy for imputing missing data
+
+Total Number of Rows with NAs are
+
+```{r NAS, echo=TRUE, warning=FALSE, message=FALSE}
+sum(!complete.cases(df))
+```
+
+The mice package implements a method to deal with missing data. The package creates multiple imputations (replacement values) for multivariate missing data. The method is based on Fully Conditional Specification, where each incomplete variable is imputed by a separate model. The MICE algorithm can impute mixes of continuous, binary, unordered categorical and ordered categorical data. In addition, MICE can impute continuous two-level data, and maintain consistency between imputations by means of passive imputation. Many diagnostic plots are implemented to inspect the quality of the imputations.
+
+Generates Multivariate Imputations by Chained Equations (MICE)
+
+```{r missing data, echo=TRUE, warning=FALSE, message=FALSE}
+library("mice")
+md.pattern(df)
+library(VIM)
+mice_plot <- aggr(df, col=c('navyblue','yellow'),
+                    numbers=TRUE, sortVars=TRUE,
+                    labels=names(df), cex.axis=.7,
+                    gap=3, ylab=c("Missing data","Pattern"))
+
+imputed_Data <- mice(df, m=5, maxit = 50, method = 'pmm', seed = 500)
+summary(imputed_Data)
+completeData <- complete(imputed_Data,2)
+```
+
+## Histogram of the total number of steps taken each day after missing values are imputed
+
+Using Multivariate Imputations by Chained Equations missing values are imputed 
+and then histogram is formed.
+
+```{r imputed data histogram, echo=TRUE, warning=FALSE, message=FALSE}
+hist(completeData$steps, main = "Total Number of Steps Taken Each Day", xlab = 
+             "Steps")
+```
+
+## Mean & Median Number of Steps Taken Each Day for Complete Data
+
+Return the Mean & Median Value for Steps Taken Each Day for imputed dataset
+
+```{r mean & median for complete, echo=TRUE, warning=FALSE, message=FALSE}
+library(plyr);library(dplyr)
+f <- function(x){
+        list(mean(x, na.rm = TRUE), median(x, na.rm = TRUE))
+}
+df3 <- select(completeData, steps)  
+as.data.frame(sapply(df3, f), row.names = c("Mean", "Median"))
+```
+
+## Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+```{r weekend vs weekday, echo=TRUE, warning=FALSE, message=FALSE}
+library("lubridate")
+completeData$wday <- ifelse(wday(completeData$date) %in% c(6,7), "Weekend",
+                            "Weekday")
+
+par(mfrow = c(2, 1), mar = c(4,4,3,2))
+dfweekend <- aggregate(completeData[completeData$wday == "Weekend",], 
+          by = list(completeData[completeData$wday == "Weekend",]$interval), 
+          mean)
+plot(dfweekend$Group.1, dfweekend$steps, type = "l", xlab = "Interval",
+     ylab = "Average Number of Steps", main = "Weekend Steps")
+
+dfweekday <- aggregate(completeData[completeData$wday == "Weekday",], 
+                       by = list(completeData[completeData$wday == "Weekday",]$interval), 
+                       mean)
+plot(dfweekday$Group.1, dfweekday$steps, type = "l", xlab = "Interval",
+     ylab = "Average Number of Steps", main = "Weekday Steps")
+```
